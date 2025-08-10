@@ -76,7 +76,9 @@ class TankMonitorApp {
                 waterLevel,
                 petrolLevel,
                 pumpState: latestFeed.field3 === '1' ? 'ON' : 'OFF',
-                floatSensor: latestFeed.field2 === '1' ? 'ON' : 'OFF'
+                floatSensor: latestFeed.field2 === '1' ? 'ON' : 'OFF',
+                status: waterLevel > 16 ? 'WARNING' : 'OK', // ✅ Added status logic
+                source: 'ThingSpeak' // ✅ mark as API data
             };
 
             console.log("Transformed Record:", transformed);
@@ -89,6 +91,8 @@ class TankMonitorApp {
                 name: transformed.tankName,
                 waterLevel: transformed.waterLevel,
                 petrolLevel: transformed.petrolLevel,
+                PumpState: transformed.pumpState,
+                floatSensor: transformed.floatSensor,
                 status: transformed.waterLevel > 16 ? 'WARNING' : 'OK'
             };
 
@@ -145,7 +149,18 @@ class TankMonitorApp {
         if (!this.historyData) {
             this.historyData = [];
         }
+
+        // ✅ Sirf ThingSpeak ka data save karo
+        if (record.source !== 'ThingSpeak') {
+            console.warn("Skipping non-ThingSpeak data:", record);
+            return;
+        }
+
         this.historyData.push(record);
+
+        // ✅ Sirf last 2 hours ka data rakho
+        const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
+        this.historyData = this.historyData.filter(d => new Date(d.timestamp) > twoHoursAgo);
     }
 
     startAutoRefresh() {
@@ -205,21 +220,21 @@ class TankMonitorApp {
     }
 
     checkAuth() {
-    const user = localStorage.getItem('tankMonitor_user');
-    if (user) {
-        try {
-            this.currentUser = JSON.parse(user);
-            this.showApp();
-            this.loadPage(this.currentPage);
-        } catch (e) {
-            console.error("Invalid JSON in tankMonitor_user:", e);
-            localStorage.removeItem('tankMonitor_user'); // clear corrupted data
+        const user = localStorage.getItem('tankMonitor_user');
+        if (user) {
+            try {
+                this.currentUser = JSON.parse(user);
+                this.showApp();
+                this.loadPage(this.currentPage);
+            } catch (e) {
+                console.error("Invalid JSON in tankMonitor_user:", e);
+                localStorage.removeItem('tankMonitor_user'); // clear corrupted data
+                this.showAuth();
+            }
+        } else {
             this.showAuth();
         }
-    } else {
-        this.showAuth();
     }
-}
 
 
     bindEvents() {
@@ -1023,7 +1038,7 @@ class TankMonitorApp {
             <!-- Summary Stats -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-green-600">${this.historyData.filter(d => d.status === 'OK').length}</p>
+                    <p class="text-2xl font-bold text-green-600">${this.historyData.filter(d => d.source === 'ThingSpeak' && d.status === 'OK').length}</p>
                     <p class="text-sm text-gray-600">Normal Readings</p>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6 text-center">
@@ -1037,7 +1052,7 @@ class TankMonitorApp {
                     <p class="text-sm text-gray-600">Avg Water Level</p>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-gray-800">${this.historyData.length}</p>
+                    <p class="text-2xl font-bold text-gray-800">${this.historyData.filter(d => d.source === 'ThingSpeak').length}</p>
                     <p class="text-sm text-gray-600">Total Records</p>
                 </div>
             </div>
@@ -1090,15 +1105,19 @@ class TankMonitorApp {
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Water Level</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Petrol Level</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pump State</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emergency Button</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200" id="history-table-body">
-                            ${this.historyData.slice(0, 15).map(entry => `
+                            ${this.historyData.filter(entry => entry.source === 'ThingSpeak').slice(0, 15).map(entry => `
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${this.formatDateTime(entry.timestamp)}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.waterLevel}%</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.petrolLevel}%</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.pumpState}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.floatSensor}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${entry.status === 'WARNING' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
                                             ${entry.status}
@@ -1490,6 +1509,8 @@ class TankMonitorApp {
         `;
     }
 
+
+
     initContact() {
         document.getElementById('contact-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1765,6 +1786,52 @@ class TankMonitorApp {
         });
     }
 }
+
+// Listen for export PDF button click
+document.addEventListener("click", function (e) {
+    if (e.target && e.target.id === "export-btn") {
+        exportHistoryToPDF();
+    }
+});
+
+function exportHistoryToPDF() {
+    const filteredData = app.historyData.filter(d => d.source === 'ThingSpeak');
+
+    if (filteredData.length === 0) {
+        alert("No ThingSpeak history data available to export.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text("ThingSpeak Tank History", 14, 15);
+
+    // Table headers (tankName & source skipped)
+    const headers = [["Timestamp", "Water Level (%)", "Petrol Level (%)", "Pump State", "Float Sensor", "Status"]];
+
+    // Table rows
+    const rows = filteredData.map(d => [
+        app.formatDateTime(d.timestamp),
+        `${d.waterLevel ?? 0}%`,
+        `${d.petrolLevel ?? 0}%`,
+        d.pumpState,
+        d.floatSensor,
+        d.status
+    ]);
+
+    // Add table to PDF
+    doc.autoTable({
+        head: headers,
+        body: rows,
+        startY: 25
+    });
+
+    // Save the file
+    doc.save(`Tank_History_${new Date().toISOString().split("T")[0]}.pdf`);
+}
+
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
