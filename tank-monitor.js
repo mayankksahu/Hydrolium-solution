@@ -33,16 +33,16 @@ class TankMonitorApp {
 
     }
 
-    saveToHistory(newEntry) {
-        // Add the new entry to the history
-        this.historyData.push(newEntry);
+    // saveToHistory(newEntry) {
+    //     // Add the new entry to the history
+    //     this.historyData.push(newEntry);
 
-        // Calculate the timestamp 2 hours ago
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    //     // Calculate the timestamp 2 hours ago
+    //     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
-        // Filter history to keep only the last 2 hours
-        this.historyData = this.historyData.filter(entry => new Date(entry.timestamp) >= twoHoursAgo);
-    }
+    //     // Filter history to keep only the last 2 hours
+    //     this.historyData = this.historyData.filter(entry => new Date(entry.timestamp) >= twoHoursAgo);
+    // }
 
     async fetchAndStreamThingSpeakData() {
         try {
@@ -145,22 +145,63 @@ class TankMonitorApp {
         this.fetchContaminationAlert();
     }
 
-    saveToHistory(record) {
-        if (!this.historyData) {
-            this.historyData = [];
+    // saveToHistory(record) {
+    //     if (!this.historyData) {
+    //         this.historyData = [];
+    //     }
+
+    //     // ✅ Sirf ThingSpeak ka data save karo
+    //     if (record.source !== 'ThingSpeak') {
+    //         console.warn("Skipping non-ThingSpeak data:", record);
+    //         return;
+    //     }
+
+    //     this.historyData.push(record);
+
+    //     // ✅ Sirf last 2 hours ka data rakho
+    //     const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
+    //     this.historyData = this.historyData.filter(d => new Date(d.timestamp) > twoHoursAgo);
+    // }
+
+    async loadThingSpeakHistory() {
+        try {
+            const res = await fetch('https://api.thingspeak.com/channels/3024727/feeds.json?results=1000');
+            const data = await res.json();
+
+            const rows = data.feeds
+                .slice() // copy array
+                .reverse() // ✅ latest first
+                .map(feed => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${new Date(feed.created_at).toLocaleString()}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${feed.field1}%
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${100 - feed.field1}%
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${feed.field3 === '1' ? 'ON' : 'OFF'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${feed.field2 === '1' ? 'ON' : 'OFF'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${parseFloat(feed.field1) > 16
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-green-100 text-green-800'}">
+                            ${parseFloat(feed.field1) > 16 ? 'WARNING' : 'OK'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById("history-table-body").innerHTML = rows;
+        } catch (err) {
+            console.error("Error loading ThingSpeak history:", err);
         }
-
-        // ✅ Sirf ThingSpeak ka data save karo
-        if (record.source !== 'ThingSpeak') {
-            console.warn("Skipping non-ThingSpeak data:", record);
-            return;
-        }
-
-        this.historyData.push(record);
-
-        // ✅ Sirf last 2 hours ka data rakho
-        const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
-        this.historyData = this.historyData.filter(d => new Date(d.timestamp) > twoHoursAgo);
     }
 
     startAutoRefresh() {
@@ -235,7 +276,6 @@ class TankMonitorApp {
             this.showAuth();
         }
     }
-
 
     bindEvents() {
         const loginForm = document.getElementById('login-form');
@@ -408,7 +448,7 @@ class TankMonitorApp {
                 break;
             case 'history':
                 content.innerHTML = this.getHistoryHTML();
-                this.initHistoryPage();
+                this.loadThingSpeakHistory(); // ✅ direct API se history load karega
                 break;
             case 'about':
                 content.innerHTML = this.getAboutHTML();
@@ -610,7 +650,6 @@ class TankMonitorApp {
             // Save as PDF
             doc.save('tank1_history.pdf');
         });
-
     };
 
     renderHistoryTable(data) {
@@ -653,7 +692,6 @@ class TankMonitorApp {
             </td>
         </tr>
     `).join('');
-
     }
 
     startDataSimulation() {
@@ -1027,109 +1065,74 @@ class TankMonitorApp {
 
     getHistoryHTML() {
         return `
-        <div class="space-y-6 fade-in">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Tank History</h1>
-                    <p class="text-gray-600 mt-1">Historical contamination data and readings</p>
-                </div>
-            </div>
-
-            <!-- Summary Stats -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-green-600">${this.historyData.filter(d => d.source === 'ThingSpeak' && d.status === 'OK').length}</p>
-                    <p class="text-sm text-gray-600">Normal Readings</p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-red-600">${this.historyData.filter(d => d.status === 'WARNING').length}</p>
-                    <p class="text-sm text-gray-600">Warning Alerts</p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-blue-600">
-                        ${(this.historyData.reduce((acc, d) => acc + parseFloat(d.waterLevel), 0) / this.historyData.length || 0).toFixed(1)}%
-                    </p>
-                    <p class="text-sm text-gray-600">Avg Water Level</p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-6 text-center">
-                    <p class="text-2xl font-bold text-gray-800">${this.historyData.filter(d => d.source === 'ThingSpeak').length}</p>
-                    <p class="text-sm text-gray-600">Total Records</p>
-                </div>
-            </div>
-
-            <!-- Filter Bar -->
-            <div class="bg-white rounded-lg shadow p-6 flex flex-col sm:flex-row flex-wrap gap-4 justify-between items-center">
-                <div class="flex flex-wrap gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">From</label>
-                        <input type="date" id="filter-start-date" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">To</label>
-                        <input type="date" id="filter-end-date" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select id="filter-status" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
-                            <option value="">All</option>
-                            <option value="OK">OK</option>
-                            <option value="WARNING">WARNING</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="flex gap-3 flex-wrap">
-                    <button id="apply-filter-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                        Apply Filters
-                    </button>
-                    <button id="clear-filter-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
-                        Clear Filters
-                    </button>
-                    <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                        <i class="fas fa-download"></i> Export pdf
-                    </button>
-                </div>
-            </div>
-
-            <!-- History Table -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-semibold flex items-center gap-2">
-                        <i class="fas fa-history text-blue-600"></i>
-                        Recent Tank Readings
-                    </h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Water Level</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Petrol Level</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pump State</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emergency Button</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200" id="history-table-body">
-                            ${this.historyData.filter(entry => entry.source === 'ThingSpeak').slice(0, 15).map(entry => `
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${this.formatDateTime(entry.timestamp)}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.waterLevel}%</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.petrolLevel}%</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.pumpState}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${entry.floatSensor}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${entry.status === 'WARNING' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
-                                            ${entry.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
+    <div class="space-y-6 fade-in">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Tank History</h1>
+                <p class="text-gray-600 mt-1">Historical contamination data and readings</p>
             </div>
         </div>
+
+        <!-- Filter Bar -->
+        <div class="bg-white rounded-lg shadow p-6 flex flex-col sm:flex-row flex-wrap gap-4 justify-between items-center">
+            <div class="flex flex-wrap gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input type="date" id="filter-start-date" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input type="date" id="filter-end-date" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select id="filter-status" class="border border-gray-300 rounded px-3 py-2 text-sm w-40">
+                        <option value="">All</option>
+                        <option value="OK">OK</option>
+                        <option value="WARNING">WARNING</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex gap-3 flex-wrap">
+                <button id="apply-filter-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Apply Filters
+                </button>
+                <button id="clear-filter-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
+                    Clear Filters
+                </button>
+                <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                    <i class="fas fa-download"></i> Export pdf
+                </button>
+            </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold flex items-center gap-2">
+                    <i class="fas fa-history text-blue-600"></i>
+                    Recent Tank Readings
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Water Level</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Petrol Level</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pump State</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emergency Button</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="6" class="text-center py-4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     `;
     }
 
@@ -1509,8 +1512,6 @@ class TankMonitorApp {
         `;
     }
 
-
-
     initContact() {
         document.getElementById('contact-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1788,50 +1789,59 @@ class TankMonitorApp {
 }
 
 // Listen for export PDF button click
-document.addEventListener("click", function (e) {
+document.addEventListener("click", function(e) {
     if (e.target && e.target.id === "export-btn") {
         exportHistoryToPDF();
     }
 });
 
-function exportHistoryToPDF() {
-    const filteredData = app.historyData.filter(d => d.source === 'ThingSpeak');
+async function exportHistoryToPDF() {
+    try {
+        // ✅ ThingSpeak se latest data fetch
+        const res = await fetch('https://api.thingspeak.com/channels/3024727/feeds.json?results=1000');
+        const data = await res.json();
 
-    if (filteredData.length === 0) {
-        alert("No ThingSpeak history data available to export.");
-        return;
+        const latestData = data.feeds.slice().reverse(); // latest-first
+
+        if (latestData.length === 0) {
+            alert("No ThingSpeak data available to export.");
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        doc.setFontSize(16);
+        doc.text("ThingSpeak Tank History", 14, 15);
+
+        const headers = [["Timestamp", "Water Level (%)", "Petrol Level (%)", "Pump", "Float", "Status"]];
+        const rows = latestData.map(feed => [
+            new Date(feed.created_at).toLocaleString(),
+            `${feed.field1}%`,
+            `${100 - feed.field1}%`,
+            feed.field3 === '1' ? 'ON' : 'OFF',
+            feed.field2 === '1' ? 'ON' : 'OFF',
+            parseFloat(feed.field1) > 16 ? 'WARNING' : 'OK'
+        ]);
+
+        doc.autoTable({
+            head: headers,
+            body: rows,
+            startY: 25
+        });
+
+        doc.save(`Tank_History_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (err) {
+        console.error("Error exporting PDF:", err);
+        alert("Failed to export PDF.");
     }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    doc.setFontSize(16);
-    doc.text("ThingSpeak Tank History", 14, 15);
-
-    // Table headers (tankName & source skipped)
-    const headers = [["Timestamp", "Water Level (%)", "Petrol Level (%)", "Pump State", "Float Sensor", "Status"]];
-
-    // Table rows
-    const rows = filteredData.map(d => [
-        app.formatDateTime(d.timestamp),
-        `${d.waterLevel ?? 0}%`,
-        `${d.petrolLevel ?? 0}%`,
-        d.pumpState,
-        d.floatSensor,
-        d.status
-    ]);
-
-    // Add table to PDF
-    doc.autoTable({
-        head: headers,
-        body: rows,
-        startY: 25
-    });
-
-    // Save the file
-    doc.save(`Tank_History_${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
+// document.addEventListener('click', function (e) {
+//     if (e.target.id === 'history-tab') {
+//         loadThingSpeakHistory();
+//     }
+// });
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
