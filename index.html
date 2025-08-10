@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Tank Monitor - Petrol Pump Water Detection</title>
+    <!-- <script src="https://js-de.sentry-cdn.com/c15280f6a91f2d29cd806e62b56a9383.min.js" crossorigin="anonymous"></script>
+    <script>
+  Sentry.init({
+    dsn: "https://4509809723375616@self-5uc/Self",
+    integrations: [new Sentry.BrowserTracing()],
+    tracesSampleRate: 1.0, // adjust to 0.1 or lower in production
+  });
+</script> -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom animations and styles */
+        @keyframes tank-fill {
+            from {
+                height: 0%;
+            }
+
+            to {
+                height: var(--fill-height);
+            }
+        }
+
+        @keyframes pulse-slow {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tank-fill {
+            animation: tank-fill 1.5s ease-out;
+        }
+
+        .pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .fade-in {
+            animation: fade-in 0.5s ease-out;
+        }
+
+        .sidebar-collapsed {
+            transform: translateX(-100%);
+        }
+
+        /* Custom oil/water tank gradients */
+        .oil-gradient {
+            background: linear-gradient(180deg, #1f2937 0%, #374151 50%, #4b5563 100%);
+        }
+
+        .water-gradient {
+            background: linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+        }
+
+        .contamination-high {
+            background: linear-gradient(180deg, #dc2626 0%, #b91c1c 50%, #991b1b 100%);
+        }
+
+        /* Progress bar styling */
+        .progress-bar {
+            transition: width 0.8s ease-in-out;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans">
+    <!-- Authentication Container -->
+    <div id="auth-container" class="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100">
+        <!-- Login Page -->
+        <div id="login-page" class="min-h-screen flex items-center justify-center p-4">
+            <div class="w-full max-w-md">
+                <div class="text-center mb-8 fade-in">
+                    <div class="bg-blue-600 p-4 rounded-2xl shadow-lg inline-block mb-4">
+                        <i class="fas fa-gas-pump text-white text-3xl"></i>
+                    </div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Smart Tank Monitor</h1>
+                    <p class="text-gray-600">Petrol Pump Water Detection System</p>
+                </div>
+
+                <div class="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl p-6">
+                    <h2 class="text-2xl font-semibold text-center mb-2">Welcome Back</h2>
+                    <p class="text-gray-600 text-center mb-6">Sign in to monitor your tanks</p>
+
+                    <form id="login-form" class="space-y-4">
+                        <div id="login-error"
+                            class="hidden flex items-center gap-2 p-3 text-red-600 bg-red-50 border border-red-200 rounded-lg text-sm">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span id="login-error-text"></span>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input type="email" id="login-email" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="admin@tankmonitor.com">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <div class="relative">
+                                <input type="password" id="login-password" required
+                                    class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Enter your password">
+                                <button type="button" id="toggle-login-password"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="login-btn"
+                            class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02]">
+                            <span id="login-btn-text">Sign In</span>
+                            <i id="login-loading" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-600">
+                            Don't have an account?
+                            <button id="show-signup" class="text-blue-600 hover:text-blue-700 font-medium">Sign up
+                                here</button>
+                        </p>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                        <p class="font-medium mb-1">Demo Credentials:</p>
+                        <p>Email: admin@tankmonitor.com</p>
+                        <p>Password: admin123</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signup Page -->
+        <div id="signup-page" class="min-h-screen flex items-center justify-center p-4 hidden">
+            <div class="w-full max-w-md">
+                <div class="text-center mb-8 fade-in">
+                    <div class="bg-blue-600 p-4 rounded-2xl shadow-lg inline-block mb-4">
+                        <i class="fas fa-gas-pump text-white text-3xl"></i>
+                    </div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Smart Tank Monitor</h1>
+                    <p class="text-gray-600">Create your monitoring account</p>
+                </div>
+
+                <div class="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl p-6">
+                    <h2 class="text-2xl font-semibold text-center mb-2">Create Account</h2>
+                    <p class="text-gray-600 text-center mb-6">Join the tank monitoring system</p>
+
+                    <form id="signup-form" class="space-y-4">
+                        <div id="signup-error"
+                            class="hidden flex items-center gap-2 p-3 text-red-600 bg-red-50 border border-red-200 rounded-lg text-sm">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span id="signup-error-text"></span>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                            <input type="text" id="signup-name" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Your full name">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input type="email" id="signup-email" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="your@email.com">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <div class="relative">
+                                <input type="password" id="signup-password" required
+                                    class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Create a password">
+                                <button type="button" id="toggle-signup-password"
+                                    class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                            <input type="password" id="signup-confirm-password" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Confirm your password">
+                        </div>
+
+                        <button type="submit" id="signup-btn"
+                            class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02]">
+                            <span id="signup-btn-text">Create Account</span>
+                            <i id="signup-loading" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-600">
+                            Already have an account?
+                            <button id="show-login" class="text-blue-600 hover:text-blue-700 font-medium">Sign in
+                                here</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app-container" class="hidden h-screen flex bg-gray-50">
+        <!-- Sidebar -->
+        <aside id="sidebar"
+            class="fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0">
+            <div class="flex items-center justify-between h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-gas-pump text-white text-2xl"></i>
+                    <span class="text-white font-bold text-lg">Hydroleum Solution</span>
+                </div>
+                <button id="toggle-sidebar" class="lg:hidden p-2" onclick="app.toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+
+
+            </div>
+
+            <nav class="mt-8 px-4">
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#dashboard"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="dashboard">
+                            <i class="fas fa-tachometer-alt w-5"></i>
+                            <span class="font-medium">Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#history"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="history">
+                            <i class="fas fa-history w-5"></i>
+                            <span class="font-medium">History</span>
+                        </a>
+                    </li>
+                    <!-- <li>
+                        <a href="#Visual"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="Visual">
+                            <i class="fa-solid fa-chart-area"></i>
+                            <span class="font-medium">Visual</span>
+                        </a>
+                    </li> -->
+                    <li>
+                        <a href="#about"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="about">
+                            <i class="fas fa-info-circle w-5"></i>
+                            <span class="font-medium">About</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#contact"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="contact">
+                            <i class="fas fa-envelope w-5"></i>
+                            <span class="font-medium">Contact</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#profile"
+                            class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group"
+                            data-page="profile">
+                            <i class="fas fa-user w-5"></i>
+                            <span class="font-medium">Profile</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Sidebar Overlay -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden hidden"
+            onclick="app.closeSidebar()"></div>
+
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Top Navbar -->
+            <header class="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-6">
+                <div class="flex items-center gap-4">
+                    <button id="topbar-toggle"
+                        class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="hidden lg:block">
+                        <h1 class="text-xl font-semibold text-gray-900">Smart Tank Monitor</h1>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <button id="profile-dropdown"
+                            class="flex items-center gap-3 hover:bg-gray-50 rounded-lg p-2 transition-colors">
+                            <div
+                                class="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-medium text-sm">
+                                <span id="user-initials">TM</span>
+                            </div>
+                            <div class="hidden sm:block text-left">
+                                <p class="text-sm font-medium text-gray-900" id="user-name">Tank Monitor Admin</p>
+                                <p class="text-xs text-gray-500">Administrator</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-sm"></i>
+                        </button>
+
+                        <div id="dropdown-menu"
+                            class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                            <div class="px-4 py-3 border-b border-gray-100">
+                                <p class="text-sm font-medium" id="dropdown-user-name">Tank Monitor Admin</p>
+                                <p class="text-xs text-gray-500" id="dropdown-user-email">admin@tankmonitor.com</p>
+                            </div>
+                            <div class="py-1">
+                                <a href="#profile"
+                                    class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                    data-page="profile">
+                                    <i class="fas fa-user w-4"></i>
+                                    Profile Settings
+                                </a>
+                                <button id="logout-btn"
+                                    class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left">
+                                    <i class="fas fa-sign-out-alt w-4"></i>
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="flex-1 overflow-auto p-6 bg-gray-50">
+                <div id="page-content">
+                    <!-- Dashboard content will be loaded here -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module" src="./tank-monitor.js"></script>
+    <!-- jsPDF library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- jsPDF AutoTable plugin -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+</body>
+
+</html>
