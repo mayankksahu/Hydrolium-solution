@@ -1329,8 +1329,8 @@ class TankMonitorApp {
                 {
                     icon: 'fas fa-map-marker-alt',
                     title: 'Office Location',
-                    details: 'thakral jii ke saamne',
-                    description: 'bhopu road ke pass'
+                    details: 'Patel Nagar',
+                    description: 'Patel Nagar Raisen Road Bhopal'
                 },
                 {
                     icon: 'fas fa-clock',
