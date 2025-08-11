@@ -15,7 +15,10 @@ class TankMonitorApp {
             { name: 'Tank 1', waterLevel: 12, petrolLevel: 88, status: 'OK' }
             // { name: 'Tank 2', waterLevel: 25, petrolLevel: 75, status: 'WARNING' }
         ];
-        this.historyData = [];
+        this.historyData = []; // all fetched history
+        this.filteredData = []; // data after filters
+        this.currentPage = 1;
+        this.rowsPerPage = 10; // change as needed
 
         this.sameDataCount = 0;       // How many times same timestamp was seen
         this.maxSameDataLimit = 10;   // e.g. 2.5 minutes (10 * 15s = 150s = 2.5 min)
@@ -163,45 +166,135 @@ class TankMonitorApp {
     //     this.historyData = this.historyData.filter(d => new Date(d.timestamp) > twoHoursAgo);
     // }
 
+    // async loadThingSpeakHistory() {
+    //     try {
+    //         const res = await fetch('https://api.thingspeak.com/channels/3024727/feeds.json?results=1000');
+    //         const data = await res.json();
+
+    //         const rows = data.feeds
+    //             .slice() // copy array
+    //             .reverse() // ✅ latest first
+    //             .map(feed => `
+    //             <tr class="hover:bg-gray-50">
+    //                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+    //                     ${new Date(feed.created_at).toLocaleString()}
+    //                 </td>
+    //                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+    //                     ${feed.field1}%
+    //                 </td>
+    //                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+    //                     ${100 - feed.field1}%
+    //                 </td>
+    //                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+    //                     ${feed.field3 === '1' ? 'ON' : 'OFF'}
+    //                 </td>
+    //                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+    //                     ${feed.field2 === '1' ? 'ON' : 'OFF'}
+    //                 </td>
+    //                 <td class="px-6 py-4 whitespace-nowrap">
+    //                     <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${parseFloat(feed.field1) > 16
+    //                     ? 'bg-red-100 text-red-800'
+    //                     : 'bg-green-100 text-green-800'}">
+    //                         ${parseFloat(feed.field1) > 16 ? 'WARNING' : 'OK'}
+    //                     </span>
+    //                 </td>
+    //             </tr>
+    //         `).join('');
+
+    //         document.getElementById("history-table-body").innerHTML = rows;
+    //     } catch (err) {
+    //         console.error("Error loading ThingSpeak history:", err);
+    //     }
+    // }
+
     async loadThingSpeakHistory() {
-        try {
-            const res = await fetch('https://api.thingspeak.com/channels/3024727/feeds.json?results=1000');
-            const data = await res.json();
+        const res = await fetch('https://api.thingspeak.com/channels/3024727/feeds.json?results=10000');
+        const data = await res.json();
+        const historyData = data.feeds.slice().reverse(); // latest first
 
-            const rows = data.feeds
-                .slice() // copy array
-                .reverse() // ✅ latest first
-                .map(feed => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${new Date(feed.created_at).toLocaleString()}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${feed.field1}%
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${100 - feed.field1}%
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${feed.field3 === '1' ? 'ON' : 'OFF'}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${feed.field2 === '1' ? 'ON' : 'OFF'}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${parseFloat(feed.field1) > 16
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'}">
-                            ${parseFloat(feed.field1) > 16 ? 'WARNING' : 'OK'}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
+        let filteredData = [...historyData];
+        let currentPage = 1;
+        const rowsPerPage = 100;
 
-            document.getElementById("history-table-body").innerHTML = rows;
-        } catch (err) {
-            console.error("Error loading ThingSpeak history:", err);
-        }
+        const renderTable = () => {
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = filteredData.slice(start, end);
+
+            const tableBody = document.getElementById("history-table-body");
+
+            if (pageData.length === 0) {
+                tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-4 text-gray-500 italic">
+                    No results found
+                </td>
+            </tr>
+        `;
+                document.getElementById("pagination-controls").innerHTML = '';
+                return;
+            }
+
+            tableBody.innerHTML = pageData.map(feed => `
+        <tr>
+            <td class="px-6 py-4">${new Date(feed.created_at).toLocaleString()}</td>
+            <td class="px-6 py-4">${feed.field1}%</td>
+            <td class="px-6 py-4">${100 - feed.field1}%</td>
+            <td class="px-6 py-4">${feed.field3 === '1' ? 'ON' : 'OFF'}</td>
+            <td class="px-6 py-4">${feed.field2 === '1' ? 'ON' : 'OFF'}</td>
+            <td class="px-6 py-4">${parseFloat(feed.field1) > 1 ? 'WARNING' : 'OK'}</td>
+        </tr>
+    `).join('');
+
+            renderPagination();
+        };
+
+
+        const renderPagination = () => {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            document.getElementById("pagination-controls").innerHTML = Array.from({ length: totalPages }, (_, i) => `
+            <button class="px-3 py-1 border rounded ${currentPage === i + 1 ? 'bg-blue-500 text-white' : ''}" 
+                data-page="${i + 1}">
+                ${i + 1}
+            </button>
+        `).join('');
+
+            document.querySelectorAll("#pagination-controls button").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    currentPage = parseInt(btn.dataset.page);
+                    renderTable();
+                });
+            });
+        };
+
+        // Filter apply
+        document.getElementById("apply-filter-btn").addEventListener("click", () => {
+            const startDate = document.getElementById("filter-start-date").value;
+            const endDate = document.getElementById("filter-end-date").value;
+            const status = document.getElementById("filter-status").value;
+
+            filteredData = historyData.filter(feed => {
+                const feedDate = new Date(feed.created_at);
+                const feedStatus = parseFloat(feed.field1) > 1 ? 'WARNING' : 'OK';
+                return (!startDate || feedDate >= new Date(startDate)) &&
+                    (!endDate || feedDate <= new Date(endDate + 'T23:59')) &&
+                    (!status || feedStatus === status);
+            });
+            currentPage = 1;
+            renderTable();
+        });
+
+        // Clear filter
+        document.getElementById("clear-filter-btn").addEventListener("click", () => {
+            document.getElementById("filter-start-date").value = '';
+            document.getElementById("filter-end-date").value = '';
+            document.getElementById("filter-status").value = '';
+            filteredData = [...historyData];
+            currentPage = 1;
+            renderTable();
+        });
+
+        renderTable();
     }
 
     startAutoRefresh() {
@@ -722,7 +815,7 @@ class TankMonitorApp {
 
             tank.waterLevel = Math.max(5, Math.min(40, tank.waterLevel + (Math.random() - 0.5) * 2));
             tank.petrolLevel = 100 - tank.waterLevel;
-            tank.status = tank.waterLevel > 20 ? 'WARNING' : 'OK';
+            tank.status = tank.waterLevel > 1 ? 'WARNING' : 'OK';
         });
 
 
@@ -749,7 +842,7 @@ class TankMonitorApp {
                 petrolLevel: (100 - waterLevel).toFixed(1),
                 // temperature: (20 + Math.random() * 10).toFixed(1),
                 // pH: (6.5 + Math.random() * 1.5).toFixed(1),
-                status: waterLevel > 20 ? 'WARNING' : 'OK'
+                status: waterLevel > 1 ? 'WARNING' : 'OK'
             });
         }
     }
@@ -1132,6 +1225,9 @@ class TankMonitorApp {
                 </table>
             </div>
         </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-center gap-2 mt-4" id="pagination-controls"></div>
     </div>
     `;
     }
@@ -1329,8 +1425,8 @@ class TankMonitorApp {
                 {
                     icon: 'fas fa-map-marker-alt',
                     title: 'Office Location',
-                    details: 'Patel Nagar',
-                    description: 'Patel Nagar Raisen Road Bhopal'
+                    details: 'thakral jii ke saamne',
+                    description: 'bhopu road ke pass'
                 },
                 {
                     icon: 'fas fa-clock',
@@ -1789,7 +1885,7 @@ class TankMonitorApp {
 }
 
 // Listen for export PDF button click
-document.addEventListener("click", function(e) {
+document.addEventListener("click", function (e) {
     if (e.target && e.target.id === "export-btn") {
         exportHistoryToPDF();
     }
@@ -1821,7 +1917,7 @@ async function exportHistoryToPDF() {
             `${100 - feed.field1}%`,
             feed.field3 === '1' ? 'ON' : 'OFF',
             feed.field2 === '1' ? 'ON' : 'OFF',
-            parseFloat(feed.field1) > 16 ? 'WARNING' : 'OK'
+            parseFloat(feed.field1) > 1 ? 'WARNING' : 'OK'
         ]);
 
         doc.autoTable({
@@ -1836,12 +1932,6 @@ async function exportHistoryToPDF() {
         alert("Failed to export PDF.");
     }
 }
-
-// document.addEventListener('click', function (e) {
-//     if (e.target.id === 'history-tab') {
-//         loadThingSpeakHistory();
-//     }
-// });
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
