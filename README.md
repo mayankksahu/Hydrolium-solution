@@ -10,7 +10,7 @@ Built with TailwindCSS, Font Awesome, and ThingSpeak API integration, this syste
 
 📊 Real-time Dashboard – Displays live tank levels, contamination alerts, pump and sensor status.
 
-🗂️ History Tracking – Keeps the last 2 hours of readings with automatic old data removal.
+🗂️ History Tracking – Keeps historical data of readings with automatic old data removal.
 
 📄 PDF Export – Export historical data as a PDF using jsPDF.
 
